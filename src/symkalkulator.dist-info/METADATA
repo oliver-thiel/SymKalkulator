@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Briefcase-Version: 0.3.25
+Name: symkalkulator
+Formal-Name: SymKalkulator
+App-ID: info.oliver-thiel.symkalkulator
+Version: 0.0.1
+Home-page: https://github.com/oliver-thiel/SymKalkulator
+Download-URL: https://github.com/oliver-thiel/SymKalkulator
+Author: Oliver Thiel
+Author-email: privat@oliver-thiel.info
+Summary: A desktop kalkulator that uses RPN
