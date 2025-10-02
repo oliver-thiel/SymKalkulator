@@ -43,7 +43,7 @@ Det irrasjonale tallet τ          →  tau
 Det irrasjonale tallet e          →   e   
 Det irrasjonale tallet φ          →   fi  
 ```
-The trigonometric functions use degrees by default. However, if the argument is a multiple of π, then radians are used.
+The trigonometric functions use degrees by default. However, if the argument is a multiple of π, then radians are used. Thus, typing `45<ENTER>sin<ENTER>` or `pi<ENTER>4/<ENTER>sin<ENTER>` or `45<ENTER>rad<ENTER>sin<ENTER>` will all yield the same result.
 
 ## Example
 The following screenshots show how you can calculate the volume of a cone with a base radius of 2.5 and a height of 3.8:
