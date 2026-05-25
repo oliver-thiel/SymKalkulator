@@ -61,6 +61,8 @@ gasskonstanten R                               →   R
 ```
 If you enter a physical unit, the app checks whether the current number already has a unit. If the number has no unit, the unit is applied to the number. If the number has a unit, it is converted to the new unit. A warning occurs if the units are incompatible. Numbers that are multiples of π are treated as radians.
 
+To enter a number together with a unit, you must type two spaces between the number and the unit. The app understands all units known to Sympy, and additionally `min` and `'` for minute, `"` for second, `a` for year, `d` for day, `grad` for degree, `in` for inch and `Å` for Ångstrøm.
+
 ## Example
 The following screenshots show how you can calculate the volume of a cone with a base radius of 2.5 and a height of 3.8:
 
