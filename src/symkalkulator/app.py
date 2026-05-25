@@ -13,101 +13,270 @@ import PIL.Image
 import io
 
 # SymPy brukes for symbolisk matematikk
-from sympy import *
+import sympy as sp
 from sympy.ntheory.digits import digits
-# from sympy.core.numbers import equal_valued
+import sympy.physics.units as u
+import sympy.physics.units.util as uu
+from sympy.parsing.latex import parse_latex
 
 import re # Regular Expressions for å analysere det som blir tastet inn
 import pyperclip # for å kopiere verdier til utklippstavla
 
-MAKS_SIFRE = Integer(32) # Maksimalt antall sifre som kan vises i resultatfeltet
+MAKS_SIFRE = sp.Integer(32) # Maksimalt antall sifre som kan vises i resultatfeltet
 
 # Stringsymboler
-IKKETALL = u'\u22A5'
 UENDELIG = u'\u221E'
 PI = u'\u03C0'
 TAU = u'\u03C4'
 FI = u'\u03C6'
 
-# Lage hjelpetekst
-kommandoer = ['slett', 'bytt', 'kopi', '+', '-', '--', '*', '/', '%', '!', '()', '**',  'v', 'rot',
-              'lg', 'ln', 'lb', 'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'fib', '//', 
-              'mod', 'hel', 'grad', 'rad', 'utvid', 'eval', 'pi', 'tau', 'e', 'fi']
-forklaringer = ['Slett y fra stabelen',
-                'Bytt x og y',
-                'Kopier y',
-                'Adder x + y',
-                'Subtraher x - y',
-                'Bytt fortegn av y',
-                'Multipliser x·y',
-                'Divider x/y',
-                'Beregn y prosent av x',
-                'Beregn fakultet av y',
-                'Beregn binominalkoeffisient',
-                'Potenser xʸ',
-                'Beregn kvadratrot av y',
-                'Beregn y-te rot av x',
-                'Beregn briggsk logaritme av y',
-                'Beregn naturlig logaritme av y',
-                'Beregn binær logaritme y',
-                'Beregn sinus av y',
-                'Beregn cosinus av y',
-                'Beregn tangens av y',
-                'Beregn arcsinus av y',
-                'Beregn arccosinus av y',
-                'Beregn arctangens av y',
-                'Beregn det y-te fibonacci-tallet',
-                'Beregn 1/y',
-                'Beregn rest av divisjonen x/y',
-                'Omgjør y til heltall',
-                'Omgjør y fra radianer til grader',
-                'Omgjør y fra grader til radianer',
-                'Utvid et uttrykk',
-                'Evaluer et uttrykk',
-                'Det irrasjonale tallet ' + PI,
-                'Det irrasjonale tallet ' + TAU,
-                'Det irrasjonale tallet e',
-                'Det irrasjonale tallet ' + FI]
+# Sympy-atomer
+ETTALLET = sp.S.One
+NULLTALLET = sp.S.Zero
+IKKETALL = sp.S.NaN
 
-hjelpetittel = 'Hvis x og y er nederste tallene, for <funksjon> tast <innput>\n\n'
+# Lage hjelpetekst
+
+kommandoer =   {'rydd':     'Rydd stabelen',
+                'slett':    'Slett y fra stabelen',
+                'bytt':     'Bytt x og y',
+                'kopi':     'Kopier y',
+                '+':        'Adder x + y',
+                '-':        'Subtraher x - y',
+                '--':       'Bytt fortegn av y',
+                '*':        'Multipliser x·y',
+                '/':        'Divider x/y',
+                '%':        'Beregn y prosent av x',
+                '!':        'Beregn fakultet av y',
+                '()':       'Beregn binominalkoeffisient',
+                '**':       'Beregn potens xʸ',
+                'v':        'Beregn kvadratrot av y',
+                'rot':      'Beregn y-te rot av x',
+                'lg':       'Beregn briggsk logaritme av y',
+                'ln':       'Beregn naturlig logaritme av y',
+                'lb':       'Beregn binær logaritme y',
+                'sin':      'Beregn sinus av y',
+                'cos':      'Beregn cosinus av y',
+                'tan':      'Beregn tangens av y',
+                'arcsin':   'Beregn arcsinus av y',
+                'arccos':   'Beregn arccosinus av y',
+                'arctan':   'Beregn arctangens av y',
+                'fib':      'Beregn det y-te fibonacci-tallet',
+                '//':       'Beregn 1/y',
+                'resiprok': 'Beregn 1/y',
+                'mod':      'Beregn rest av divisjonen x/y',
+                'rest':     'Beregn rest av divisjonen x/y',
+                'sum':      'Beregn summen av alle tallene i stabelen',
+                'Ø':        'Beregn gjennomsnitt av alle tallene i stabelen',
+                'prod':     'Beregn produktet av alle tallene i stabelen',
+                'hel':      'Omgjør y til heltall',
+                '<enhet>':  'Omgjør y til enheten <enhet>',
+                'SI':       'Omgjør y til SI-enheter',
+                'utvid':    'Utvid et uttrykk',
+                'eval':     'Evaluer et uttrykk'} # Det er mange kommandoer som kan brukes i kalkulatoren, og de har alle en beskrivelse som vises i hjelpeteksten
+
+spesielle_tall = {'e': 'Eulers tall e',
+                  'π': 'sirkeltallet π',
+                  'pi': 'sirkeltallet π',
+                  'tau': 'Det dobbelte sirkeltallet ' + TAU,
+                  'fi': 'Det irrasjonale tallet ' + FI,
+                  'phi': 'Det irrasjonale tallet ' + FI,
+                  'oo': 'uendelig ' + UENDELIG,
+                  'G': 'gravitasjonskonstanten G',
+                  'c': 'lysets hastighet c',
+                  'hbar': 'Plancks redusete konstant ħ',
+                  'ħ': 'Plancks redusete konstant ħ',
+                  'k': 'Coulombs konstant k' + u'\u2091',
+                  'R': 'gasskonstanten R'} # Det er spesielle tall som kan tastes inn uten å være en del av en operasjon, f.eks. 'e' eller 'pi'
+
+hjelpetittel = 'Hvis x og y er nederste tallene, for <funksjon>       tast <innput>\n\n'
 hjelpetekst = ''
-for kommando, funksjon in zip(kommandoer, forklaringer):
-    hjelpetekst += f'{funksjon:<33} \u2192 {kommando:^6}\n'
+for kommando in kommandoer:
+    hjelpetekst += f'{kommandoer[kommando]:<40} \u2192 {kommando:^6}\n'
+for tall in spesielle_tall:
+    hjelpetekst += f'{spesielle_tall[tall]:<40} \u2192 {tall:^6}\n'
 
 varseltekst = '' # Global variable for varsler
 
 
-def sjekk_resultat(resultat: Expr) -> tuple[Rational, Expr]:
-    """Denne funksjonen sjekker resultatet av en beregning og returnerer det rasjonale og irrasjonale delen av resultatet.
-       Hvis resultatet er ugyldig, returneres det som NaN og en varseltekst blir satt.
+def split_måltall_enhet(enhet: sp.Mul) -> tuple[sp.Rational, sp.Expr, sp.Mul]:
+    """Denne funksjonen tar en enhet og deler den opp i måltall og enhet ved å bruke sympy. Den forenkler også enheten ved å bruke sympy.
+    
     Args:
-        resultat (Expr): Tallet som skal sjekkes.
+        enhet (sp.Mul): Enheten som skal deles opp, f.eks. 2*u.meter/u.second
+    
+    Returns:
+        sp.Rational:   Måltallet i enheten, f.eks. 2 i 2*u.meter/u.second
+        sp.Expr:       Den irrasjonale delen av måltallet, f.eks. 1 i 2*u.meter/u.second
+        sp.Mul:        Enheten uten måltallet, f.eks. u.meter/u.second i 2*u.meter/u.second
+    """
+    uttrykk = uu.quantity_simplify(enhet)
+    rasjonale_faktorer = []
+    irrasjonale_faktorer = []
+    enhet_faktorer = []
+
+    for faktor in sp.Mul.make_args(uttrykk):
+        if faktor.has(u.Quantity):
+            enhet_faktorer.append(faktor)
+        elif isinstance(faktor, sp.Rational):
+            rasjonale_faktorer.append(faktor)
+        elif isinstance(faktor, sp.Float):
+            rasjonale_faktorer.append(sp.Rational(str(faktor)))
+        else:
+            irrasjonale_faktorer.append(faktor)
+
+    rasjonal = sp.Mul(*rasjonale_faktorer) if rasjonale_faktorer else ETTALLET
+    irrasjonal = sp.Mul(*irrasjonale_faktorer) if irrasjonale_faktorer else ETTALLET
+    enhet = sp.Mul(*enhet_faktorer) if enhet_faktorer else ETTALLET
+
+    return rasjonal, irrasjonal, enhet
+
+
+def samme_dimensjon(enhet1: sp.Mul, enhet2: sp.Mul) -> bool:
+    """Denne funksjonen sammenligner to enheter og sjekker om de har samme dimensjon.
+
+    Args:
+        enhet1 (sp.Mul): Den første enheten som skal sammenlignes.
+        enhet2 (sp.Mul): Den andre enheten som skal sammenlignes.
 
     Returns:
-        Rational:   Rasjonalt del av resultatet.
-        Expr:       Irrasjonalt del av resultatet.
+        bool: True hvis enhetene er like, False ellers.
+    """
+    _, _, forenklet_enhet1 = split_måltall_enhet(enhet1)
+    _, _, forenklet_enhet2 = split_måltall_enhet(enhet2)
+    enhet2 = u.convert_to(forenklet_enhet2, forenklet_enhet1)
+    _, _, forenklet_enhet2 = split_måltall_enhet(enhet2)
+    return forenklet_enhet1 == forenklet_enhet2
+
+
+def parse_enhet(tekst: str) -> sp.Mul:
+    """Denne funksjonen tar en string og prøver å parse den som en sympy-enhet. Hvis det ikke er en gyldig enhet, returneres ETTALLET.
+
+    Args:
+        tekst (str): Teksten som skal parses som en enhet, f.eks. 'm/s' for meter per sekund
+
+    Returns:
+        sp.Mul: Enheten som teksten representerer, f.eks. u.meter/u.second for 'm/s'
+    """
+    global varseltekst
+
+    prefixes = {'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'h': 1e2, 'd': 1e-1, 'c': 1e-2, 'm': 1e-3, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12}
+    enheter = {'1': ETTALLET, 'min': u.minute, "'": u.minute, '"': u.second, 'a': u.year, 'd': u.day, 'grad': u.degree, 'in': u.inch, 'Å': u.angstrom} # Det er noen enheter som kan tastes inn uten å være en del av en operasjon, f.eks. 'min' for minutter eller 'in' for tommer
+    
+    if tekst == '': # Det er ingen enhet
+        varseltekst = 'OBS! Ugyldig innput. Det er ingen enhet.'
+        return ETTALLET
+    if tekst in enheter: # Sjekker om teksten er en gyldig enhet
+        return enheter[tekst]
+    if tekst in u.__all__[62:358]: # Sjekker om teksten er en gyldig sympy-enhet
+        return eval('u.' + tekst)
+    tekst = tekst.replace(' ', '') # Fjerner mellomrom fra teksten
+    tekst = tekst.replace('**', '^') # erstatter ** med ^ for å gjøre det lettere å parse potens av enheter
+    if tekst[0] == '(' and tekst[-1] == ')': # Sjekker om teksten er et uttrykk i parentes, f.eks. '(meter/second)**2'
+        return parse_enhet(tekst[1:-1])
+    if '/' in tekst: # Sjekker om teksten er en brøk av enheter, f.eks. 'meter/second'
+        teller, nevner = tekst.split('/')
+        return parse_enhet(teller) / parse_enhet(nevner)
+    if '*' in tekst: # Sjekker om teksten er et produkt av enheter, f.eks. 'newton*meter'
+        faktorer = tekst.split('*')
+        resultat = ETTALLET
+        for faktor in faktorer:
+            resultat *= parse_enhet(faktor)
+        return resultat
+    if '^' in tekst: # Sjekker om teksten er en potens av enheter, f.eks. 'meter**2'
+        base, eksponent = tekst.split('^')
+        return parse_enhet(base)**sp.Rational(eksponent)
+    if tekst[0] in prefixes: # Sjekker om teksten er en gyldig SI-prefiks, f.eks. 'k' for kilo
+        prefix = tekst[0]
+        enhet = tekst[1:]
+        return prefixes[prefix] * parse_enhet(enhet)
+    
+    varseltekst = 'OBS! Ugyldig innput. Enheten er ukjent.'
+    return ETTALLET
+    
+
+def latex_enhet(enhet: sp.Mul) -> str:
+    """Denne funksjonen tar en sympy-enhet og returnerer en LaTeX-representasjon av den.
+
+    Args:
+        enhet (sp.Mul): Enheten som skal konverteres til LaTeX, f.eks. u.meter/u.second
+
+    Returns:
+        str: LaTeX-representasjonen av enheten, f.eks. '\\frac{m}{s}' for u.meter/u.second
+    """
+    abbrevs = {u.hour: '\\text{h}', u.minute: '\\text{min}', u.year: '\\text{a}', u.day: '\\text{d}', 
+               u.mile: '\\text{mi}', u.hbar: '\\hbar', u.coulomb_constant: '\\text{k}_e', u.angstrom: '\\text{Å}'} # Noen enheter har spesielle LaTeX-representasjoner som ikke kan hentes fra sympy, så de må legges inn manuelt her
+    
+    if enhet == ETTALLET:
+        return ''
+    if enhet in abbrevs:
+        return abbrevs[enhet]
+    if hasattr(enhet, '_latex_repr'):
+        if enhet._latex_repr:
+            return str(enhet._latex_repr)
+    if '/' in str(enhet):
+        teller, nevner = str(enhet).split('/')
+        teller = latex_enhet(parse_enhet(teller)) if teller != '1' else '1'
+        nevner = latex_enhet(parse_enhet(nevner)) if nevner != '1' else '1'
+        if nevner != '1':
+            return '\\frac{' + teller + '}{' + nevner + '}'
+        else:
+            return teller
+    if enhet.is_Pow: # Sjekker om enheten er i form av x**(y)
+        base = latex_enhet(enhet.base)
+        eksponent = str(enhet.exp)
+        if base != '':
+            if '/' in eksponent:
+                eksponent = '\\frac{' + eksponent.split('/')[0] + '}{' + eksponent.split('/')[1] + '}'
+            return base + '^{' + eksponent + '}'
+        else:
+            return '1'
+    if '*' in str(enhet):
+        enhet = str(enhet).replace('**', '^')
+        faktorer = str(enhet).split('*')
+        latex_faktorer = [latex_enhet(parse_enhet(faktor)) for faktor in faktorer if (faktor != '' and faktor != '1')]
+        return ' \\cdot '.join(latex_faktorer)
+    
+    if hasattr(enhet, 'abbrev'):
+        return '\\text{' + str(enhet.abbrev) + '}'
+    # Hvis ingen av de spesielle tilfellene gjelder, returneres enheten som den er, men i LaTeX-format
+    return '\\text{' + str(enhet) + '}'
+    
+
+def sjekk_resultat(resultat: sp.Expr) -> tuple[sp.Rational, sp.Expr, sp.Mul]:
+    """Denne funksjonen sjekker resultatet av en beregning og returnerer det rasjonale og irrasjonale delen og enheten til resultatet.
+       Hvis resultatet er ugyldig, returneres det som NaN og en varseltekst blir satt.
+    Args:
+        resultat (sp.Expr): Tallet som skal sjekkes.
+
+    Returns:
+        sp.Rational:   Rasjonalt del av resultatet.
+        sp.Expr:       Irrasjonalt del av resultatet.
+        sp.Mul:        Enheten til resultatet.
     """
     global varseltekst
 
     forenklet_resultat = resultat.simplify()
-    rasjonal, irrasjonal = forenklet_resultat.as_content_primitive()
+    rasjonal, irrasjonal, målenhet = split_måltall_enhet(forenklet_resultat)
 
-    if irrasjonal == S.NaN:
+    if irrasjonal == IKKETALL:
         varseltekst = 'OBS! Ugyldig input. Resultatet er ikke et reelt tall.'
-        rasjonal = S.NaN
-        irrasjonal = S.One
-        return rasjonal, irrasjonal
-    if irrasjonal == S.Zero:
-        rasjonal = S.Zero
-        irrasjonal = S.One
-        return rasjonal, irrasjonal
+        rasjonal = IKKETALL
+        irrasjonal = ETTALLET
+        målenhet = ETTALLET
+        return rasjonal, irrasjonal, målenhet
+    if irrasjonal == NULLTALLET:
+        rasjonal = NULLTALLET
+        irrasjonal = ETTALLET
+        målenhet = ETTALLET
+        return rasjonal, irrasjonal, målenhet
     if irrasjonal.is_extended_negative:
         rasjonal *= -1
         irrasjonal *= -1
-    if irrasjonal == S.Infinity:
-        rasjonal *= S.Infinity
-        irrasjonal = S.One
-    return rasjonal, irrasjonal
+    if irrasjonal == sp.S.Infinity:
+        rasjonal *= sp.S.Infinity
+        irrasjonal = ETTALLET
+    return rasjonal, irrasjonal, målenhet
 
 
 class tall:
@@ -122,85 +291,120 @@ class tall:
         Args:
             tall (str): Tegnene som skal bli et tall, f.eks. '1', '0,5', '1/2', '1 2/3' eller '1,5e-3'
         """    
-        self.rasjonal: Rational = S.NaN   # Den rasjonale delen av tallet
-        self.irrasjonal: Expr = S.One  # Den irrasjonale delen av tallet (Det er 1 hvis tallet er rasjonalt)
-        self.feil: Integer = S.Zero  # Feil i beregningen
+        self.rasjonal: sp.Rational = ETTALLET   # Den rasjonale delen av tallet
+        self.irrasjonal: sp.Expr = ETTALLET  # Den irrasjonale delen av tallet (Det er 1 hvis tallet er rasjonalt)
+        self.feil: sp.Integer = NULLTALLET  # Feil i beregningen
         negativ: bool = False  # Er tallet negativt?
+        self.enhet: sp.Mul = ETTALLET # Enhet for tallet, f.eks. u.meter for meter
+        self.latexenhet: str = '' # LaTeX-representasjon av enheten, f.eks. 'm' for meter
 
+        # Det fungerer dessverre ikke med match case. Derfor må jeg bruke if.
         if tall == '': # Det er ikke et tall
             return
         
+        # Sjekker om tallet har en enhet
+        if '  ' in tall:
+            tall, enhet = tall.split('  ')
+            self.enhet = parse_enhet(enhet)
+            self.rasjonal, self.irrasjonal, self.enhet = split_måltall_enhet(self.enhet)
+            self.latexenhet = latex_enhet(self.enhet)
+        
+        # Sjekker om tallet er negativt eller positivt, og fjerner fortegnet
         if tall[0] == '-':
             negativ = True
             tall = tall[1:]
         elif tall[0] == '+':
             tall = tall[1:]
         
-        if tall == '' or tall == '0/0': # Det er ikke et tall
-            return
-        
-        # Det fungerer dessverre ikke med match case. Derfor må jeg bruke if.
+        if tall == '0/0': # Det er ikke et tall
+            return       
         if tall == '0':
-            self.rasjonal = S.Zero
+            self.rasjonal = NULLTALLET
             return
         if tall == '1':
-            self.rasjonal = S.NegativeOne if negativ else S.One
+            self.rasjonal *= sp.S.NegativeOne if negativ else ETTALLET
             return
         if tall == '0,5' or tall == '1/2':
-            self.rasjonal = S.Half
+            self.rasjonal *= sp.S.Half
             if negativ:
-                self.rasjonal *= S.NegativeOne
+                self.rasjonal *= sp.S.NegativeOne
             return
         if tall == UENDELIG or tall == '1/0' or tall == 'oo':
-            self.rasjonal = S.NegativeInfinity if negativ else S.Infinity
+            self.rasjonal = sp.S.NegativeInfinity if negativ else sp.S.Infinity
             return
         if tall == PI or tall == 'pi':
-            self.rasjonal = S.NegativeOne if negativ else S.One
-            self.irrasjonal = S.Pi
+            self.rasjonal *= sp.S.NegativeOne if negativ else ETTALLET
+            self.irrasjonal *= sp.S.Pi
             return
         if tall == TAU or tall == 'tau': # τ = 2π
-            self.rasjonal = Integer(-2) if negativ else Integer(2)
-            self.irrasjonal = S.Pi
+            self.rasjonal *= sp.Integer(-2) if negativ else sp.Integer(2)
+            self.irrasjonal *= sp.S.Pi
             return
-        if tall == E or tall == 'e':
-            self.rasjonal = S.NegativeOne if negativ else S.One
-            self.irrasjonal = S.Exp1
+        if tall == 'e':
+            self.rasjonal *= sp.S.NegativeOne if negativ else ETTALLET
+            self.irrasjonal *= sp.S.Exp1
             return
         if tall == FI or tall == 'fi' or tall == 'phi': # Det gyldne snitt φ
-            self.rasjonal = S.NegativeOne if negativ else S.One
-            self.irrasjonal = S.GoldenRatio
+            self.rasjonal *= sp.S.NegativeOne if negativ else ETTALLET
+            self.irrasjonal *= sp.S.GoldenRatio
+            return
+        if tall == 'c': # Speed of light in vacuum
+            self.rasjonal = sp.S.NegativeOne if negativ else ETTALLET
+            self.enhet = u.c
+            self.latexenhet = 'c'
+            return
+        if tall == 'G': # Gravitational constant
+            self.rasjonal = sp.S.NegativeOne if negativ else ETTALLET
+            self.enhet = u.G
+            self.latexenhet = 'G'
+            return
+        if tall == 'ħ': # Planck constant
+            self.rasjonal = sp.S.NegativeOne if negativ else ETTALLET
+            self.enhet = u.hbar
+            self.latexenhet = '\\hbar'
+            return
+        if tall == 'k': # Coulomb constant
+            self.rasjonal = sp.S.NegativeOne if negativ else ETTALLET
+            self.enhet = u.coulomb_constant
+            self.latexenhet = 'k_e'
+            return
+        if tall == 'R': # Gas constant
+            self.rasjonal = sp.S.NegativeOne if negativ else ETTALLET
+            self.enhet = u.R
+            self.latexenhet = 'R'
             return
         if re.fullmatch(r'^\d+$', tall): # heltall
-            self.rasjonal = Integer(tall)
+            self.rasjonal *= sp.Integer(tall)
             if negativ:
                 self.rasjonal *= -1
             return
         if re.fullmatch(r'^\d+ \d+/\d+$', tall): # blandet tall
             hel, brøkdel = tall.split(' ')
-            self.rasjonal = Rational(Integer(hel) + Rational(brøkdel))
+            teller, nevner = brøkdel.split('/')
+            self.rasjonal *= sp.Rational(sp.Integer(hel) + sp.Rational(teller, nevner))
             if negativ:
-                self.rasjonal *= S.NegativeOne
+                self.rasjonal *= sp.S.NegativeOne
             return
         if re.fullmatch(r'^\d+/\d+$', tall): # brøk
             teller, nevner = tall.split('/')
-            self.rasjonal = Rational(teller, nevner)
+            self.rasjonal = sp.Rational(teller, nevner)
             if negativ:
-                self.rasjonal *= S.NegativeOne
+                self.rasjonal *= sp.S.NegativeOne
             return
         if re.fullmatch(r'^\d+,\d+$', tall): # desimaltall
-            self.rasjonal = Rational(tall.replace(',', '.'))
+            self.rasjonal *= sp.Rational(tall.replace(',', '.'))
             if negativ:
-                self.rasjonal *= S.NegativeOne
+                self.rasjonal *= sp.S.NegativeOne
             return
         if re.fullmatch(r'^\d+(,\d+)?e[+-]?\d+$', tall): # vitenskapelig format
-            self.rasjonal = Rational(tall.replace(',', '.'))
+            self.rasjonal *= sp.Rational(tall.replace(',', '.'))
             if negativ:
-                self.rasjonal *= S.NegativeOne
+                self.rasjonal *= sp.S.NegativeOne
             return
 
 
     def kopi(self):
-        """Lager en kopi av et tall
+        """Lager en kopi av et tall og dets enhet
 
         Returns:
             tall: et nytt tall med samme verdi som self
@@ -208,36 +412,50 @@ class tall:
         c = tall('1')
         c.rasjonal = self.rasjonal
         c.irrasjonal = self.irrasjonal
+        c.enhet = self.enhet
+        c.latexenhet = self.latexenhet
         return c
 
 
     def gjør_hel(self) -> None:
-        """Tar bare heltallig delen av et tall, dvs. 2,5 blir 2 og -2,5 blir -2
+        """Tar bare heltallig delen av et tall, dvs. 2,5 blir 2 og -2,5 blir -2.
+           Enheten til tallet blir også beholdt.
         """
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity: # ∞ eller -∞
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity: # ∞ eller -∞
             return
-        if self.rasjonal != S.NaN:
-            self.rasjonal = Integer(Mul(self.rasjonal, self.irrasjonal))
-            self.irrasjonal = S.One 
+        if self.rasjonal != IKKETALL:
+            self.rasjonal = sp.Integer(sp.Mul(self.rasjonal, self.irrasjonal))
+            self.irrasjonal = ETTALLET 
 
 
     def resiprok(self) -> None:
         """Beregner resiprokverdien av et tall, dvs. 1/self
         """        
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity: # 1/∞ = 0
-            self.rasjonal = S.Zero
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity: # 1/∞ = 0
+            self.rasjonal = NULLTALLET
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if self.rasjonal == S.Zero: # 1/0 = ∞ 
-            self.rasjonal = S.Infinity
+        
+        if self.enhet != ETTALLET:
+            self.enhet = ETTALLET / self.enhet
+            self.latexenhet = latex_enhet(self.enhet)
+
+        if self.rasjonal == NULLTALLET: # 1/0 = ∞ 
+            self.rasjonal = sp.S.Infinity
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if self.rasjonal == S.One and self.irrasjonal == S.One: # 1/1 = 1
+        if self.rasjonal == ETTALLET and self.irrasjonal == ETTALLET: # 1/1 = 1
             return
-        if self.rasjonal == S.NegativeOne and self.irrasjonal == S.One: # 1/1 = 1
+        if self.rasjonal == sp.S.NegativeOne and self.irrasjonal == ETTALLET: # 1/(-1) = -1
             return
-        if self.rasjonal != S.NaN:
+        if self.rasjonal != IKKETALL:
             b = self.kopi()
-            self.rasjonal = S.One/b.rasjonal
-            self.irrasjonal = S.One/b.irrasjonal
+            self.rasjonal = ETTALLET/b.rasjonal
+            self.irrasjonal = ETTALLET/b.irrasjonal
             return
 
 
@@ -248,34 +466,59 @@ class tall:
             addend (tall): Tallet som legges til
         """
         global varseltekst
+
         if addend.__class__ != tall: # Kan bare addere et tall
             return
-        if addend.rasjonal == S.NaN: # kan bare addere tall
+        if addend.rasjonal == IKKETALL: # kan bare addere tall
             return
-        if self.rasjonal == S.NaN: # NaN + x = x
+        if self.rasjonal == IKKETALL: # NaN + x = x
             self.rasjonal = addend.rasjonal
             self.irrasjonal = addend.irrasjonal
+            self.enhet = addend.enhet
+            self.latexenhet = addend.latexenhet
             return
-        if self.rasjonal == S.NegativeInfinity and addend.rasjonal == S.Infinity: # -∞ + ∞ er ikke definert
+        if self.rasjonal == sp.S.NegativeInfinity and addend.rasjonal == sp.S.Infinity: # -∞ + ∞ er ikke definert
             varseltekst = '-' + UENDELIG + ' pluss ' + UENDELIG + ' er ikke definert.'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if self.rasjonal == S.Infinity and addend.rasjonal == S.NegativeInfinity: # ∞ - ∞ er ikke definert
+        if self.rasjonal == sp.S.Infinity and addend.rasjonal == sp.S.NegativeInfinity: # ∞ - ∞ er ikke definert
             varseltekst = UENDELIG + ' minus ' + UENDELIG + ' er ikke definert.'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity: # ∞ + x = ∞
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity: # ∞ + x = ∞
             return
-        if addend.rasjonal == S.Infinity or addend.rasjonal == S.NegativeInfinity: # x + ∞ = ∞
+        if addend.rasjonal == sp.S.Infinity or addend.rasjonal == sp.S.NegativeInfinity: # x + ∞ = ∞
             self.rasjonal = addend.rasjonal
             self.irrasjonal = addend.irrasjonal
+            self.enhet = addend.enhet
+            self.latexenhet = addend.latexenhet
             return
-        if self.irrasjonal == S.One and addend.irrasjonal == S.One: # Det er to rasjonale tall
+        
+        if self.enhet != ETTALLET or addend.enhet != ETTALLET: # Hvis en av tallene har en enhet, må de ha samme enhet for å kunne adderes
+            if not samme_dimensjon(self.enhet, addend.enhet):
+                varseltekst = 'OBS! Kan ikke addere tall med forskjellige dimensjoner.'
+                return
+            if self.enhet != addend.enhet: # Hvis enhetene er forskjellige, må den ene konverteres til den andre før de kan adderes
+                ny_enhet = u.convert_to(self.enhet, addend.enhet)
+                rasjonal_måltall, irrasjonal_måltall, ny_enhet = split_måltall_enhet(ny_enhet)
+                self.rasjonal *= rasjonal_måltall
+                self.irrasjonal *= irrasjonal_måltall
+                self.enhet = ny_enhet
+        
+        if self.irrasjonal == ETTALLET and addend.irrasjonal == ETTALLET: # Det er to rasjonale tall
             self.rasjonal += addend.rasjonal
+            self.latexenhet = addend.latexenhet
             return
 
-        verdi = Add(Mul(self.rasjonal, self.irrasjonal), Mul(addend.rasjonal, addend.irrasjonal))
-        self.rasjonal, self.irrasjonal = sjekk_resultat(verdi)
+        verdi = sp.Add(sp.Mul(self.rasjonal, self.irrasjonal, self.enhet), sp.Mul(addend.rasjonal, addend.irrasjonal, addend.enhet))
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(verdi)
+        self.latexenhet = latex_enhet(self.enhet)
 
     
     def minus(self, minuend) -> None:
@@ -298,50 +541,68 @@ class tall:
             faktor (tall): Tallet som ganges med
         """        
         global varseltekst
+
         if faktor.__class__ != tall: # Kan bare gange tall
             return
-        if self.rasjonal == S.NaN: # kan bare gange tall
+        if self.rasjonal == IKKETALL: # kan bare gange tall
             varseltekst = 'Du kan bare gange tall.'
             return
-        if faktor.rasjonal == S.NaN: # kan bare gange med tall
+        if faktor.rasjonal == IKKETALL: # kan bare gange med tall
             varseltekst = 'Du kan bare gange tall.'
             return
-        if (self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity) \
-            and (faktor.rasjonal == S.Infinity or faktor.rasjonal == S.NegativeInfinity): # ∞ * ∞ er ikke definert
+        
+        if (self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity) \
+            and (faktor.rasjonal == sp.S.Infinity or faktor.rasjonal == sp.S.NegativeInfinity): # ∞ * ∞ er ikke definert
             varseltekst = UENDELIG + ' ganger ' + UENDELIG + ' er ikke definert.'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity: # ∞ * x er ∞
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity: # ∞ * x er ∞
             match faktor.rasjonal:
-                case S.Zero:
+                case sp.S.Zero:
                     varseltekst = UENDELIG + ' ganger 0 er ikke definert.'
-                    self.rasjonal = S.NaN
-                case S.Infinity:
+                    self.rasjonal = IKKETALL
+                    self.enhet = ETTALLET
+                    self.latexenhet = ''
+                case sp.S.Infinity:
                     varseltekst = UENDELIG + ' ganger ' + UENDELIG + ' er ikke definert.'
-                    self.rasjonal = S.NaN
-                case S.NegativeInfinity:
-                    varseltekst = UENDELIG + ' ganger ' + UENDELIG + ' er ikke definert.'
-                    self.rasjonal = S.NaN
+                    self.rasjonal = IKKETALL
+                    self.enhet = ETTALLET
+                    self.latexenhet = ''
+                case sp.S.NegativeInfinity:
+                    varseltekst = UENDELIG + ' ganger -' + UENDELIG + ' er ikke definert.'
+                    self.rasjonal = IKKETALL
+                    self.enhet = ETTALLET
+                    self.latexenhet = ''
                 case _:
-                    self.rasjonal = faktor.rasjonal * self.rasjonal
-            self.irrasjonal = S.One
+                    self.rasjonal *= faktor.rasjonal
+                    self.enhet *= faktor.enhet
+                    self.latexenhet = latex_enhet(self.enhet)
+            self.irrasjonal = ETTALLET
             return
-        if faktor.rasjonal == S.Infinity or faktor.rasjonal == S.NegativeInfinity: # x * ∞ er ∞
-            match self.rasjonal:
-                case S.Zero:
-                    varseltekst = '0 ganger ' + UENDELIG + ' er ikke definert.'
-                    self.rasjonal = S.NaN
-                case _:
-                    self.rasjonal = faktor.rasjonal * self.rasjonal
-            self.irrasjonal = S.One
+        if faktor.rasjonal == sp.S.Infinity or faktor.rasjonal == sp.S.NegativeInfinity: # x * ∞ er ∞
+            if self.rasjonal == NULLTALLET:
+                varseltekst = '0 ganger ' + UENDELIG + ' er ikke definert.'
+                self.rasjonal = IKKETALL
+                self.enhet = ETTALLET
+                self.latexenhet = ''
+            else:
+                self.rasjonal *= faktor.rasjonal
+                self.enhet *= faktor.enhet
+                self.latexenhet = latex_enhet(self.enhet)
+            self.irrasjonal = ETTALLET
             return
-        if self.rasjonal == S.Zero or faktor.rasjonal == S.Zero: # x * 0 er 0
-            self.rasjonal = S.Zero
-            self.irrasjonal = S.One
+        if self.rasjonal == NULLTALLET or faktor.rasjonal == NULLTALLET: # x * 0 er 0
+            self.rasjonal = NULLTALLET
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
 
-        resultat = Mul(self.rasjonal, self.irrasjonal, faktor.rasjonal, faktor.irrasjonal)
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        resultat = sp.Mul(self.rasjonal, self.irrasjonal, self.enhet, faktor.rasjonal, faktor.irrasjonal, faktor.enhet)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
         
         
     def delt_med(self, dividend) -> None:
@@ -361,20 +622,22 @@ class tall:
         """Beregner fakultet av et naturlig tall: 1 * 2 * ... * self
         """        
         global varseltekst
-        if self.irrasjonal != S.One or self.rasjonal < S.Zero or not self.rasjonal.is_integer:
+
+        if self.irrasjonal != ETTALLET or self.rasjonal < NULLTALLET or not self.rasjonal.is_integer:
             varseltekst = 'OBS! Kan bare beregne fakultet av naturlige tall.'
             return
-        self.rasjonal = Integer(factorial(self.rasjonal))
+        self.rasjonal = sp.Integer(sp.factorial(self.rasjonal))
 
   
     def fib(self) -> None:
         """Beregner fibonacci-tallet av et naturlig tall
         """        
         global varseltekst
-        if self.irrasjonal != S.One or self.rasjonal < S.Zero or not self.rasjonal.is_integer:
+
+        if self.irrasjonal != ETTALLET or self.rasjonal < NULLTALLET or not self.rasjonal.is_integer:
             varseltekst = 'OBS! Kan bare beregne fibinacci-tallet av naturlige tall.'
             return
-        self.rasjonal = fibonacci(self.rasjonal)
+        self.rasjonal = sp.fibonacci(self.rasjonal)
 
   
     def binom(self, k) -> None:
@@ -384,17 +647,18 @@ class tall:
             k (tall): nederste tall i binominalkoeffisienten n over k
         """        
         global varseltekst
+
         if k.__class__ != tall: # Kan bare regne med tall
             return
-        if k.irrasjonal != S.One or not k.rasjonal.is_integer:
+        if k.irrasjonal != ETTALLET or not k.rasjonal.is_integer:
             varseltekst = 'OBS! Kan bare beregne binominalkoeffisienten over et heltall.'
             return
-        if k.rasjonal < S.Zero:
-            self.rasjonal = S.Zero
-            self.irrasjonal = S.One
+        if k.rasjonal < NULLTALLET:
+            self.rasjonal = NULLTALLET
+            self.irrasjonal = ETTALLET
             return
-        if self.irrasjonal == S.One:
-            self.rasjonal = binomial(self.rasjonal, k.rasjonal)
+        if self.irrasjonal == ETTALLET:
+            self.rasjonal = sp.binomial(self.rasjonal, k.rasjonal)
         else:
             varseltekst = 'OBS! Kan bare beregne binominalkoeffisienten av rasjonale tall.'
 
@@ -406,226 +670,319 @@ class tall:
             potens (tall): potensen som tallet opphøyes i
         """        
         global varseltekst
-        if potens.__class__ != tall: # Kan bare regne med tall
+
+        if potens.__class__ != tall or potens.enhet != ETTALLET: # Kan bare regne med tall
             return
-        if potens.rasjonal == S.Zero:
-            self.rasjonal = S.One
-            self.irrasjonal = S.One
+        if potens.rasjonal == NULLTALLET:
+            self.rasjonal = ETTALLET
+            self.irrasjonal = ETTALLET
+            self.enhet = ETTALLET
+            self.latexenhet = ''
             return
-        if potens.rasjonal == S.One and potens.irrasjonal == S.One:
+        if potens.rasjonal == ETTALLET and potens.irrasjonal == ETTALLET:
             return
 
-        resultat = Pow(Mul(self.rasjonal, self.irrasjonal), Mul(potens.rasjonal, potens.irrasjonal))
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        resultat = sp.Pow(sp.Mul(self.rasjonal, self.irrasjonal, self.enhet), sp.Mul(potens.rasjonal, potens.irrasjonal))
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
 
     def lb(self) -> None:
         """Beregner logaritme til base 2
         """        
         global varseltekst
-        if self.rasjonal < S.Zero:
+
+        if self.rasjonal < NULLTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av positive tall!'
             return
-        if self.rasjonal == S.NaN:
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av et tall!'
             return
-        if self.rasjonal == S.Zero: # lb(0) = -∞
-            self.rasjonal = S.NegativeInfinity
-            self.irrasjonal = S.One
+        if self.rasjonal == NULLTALLET: # lb(0) = -∞
+            self.rasjonal = sp.S.NegativeInfinity
+            self.irrasjonal = ETTALLET
             return
-        if self.rasjonal == S.Infinity: # lb(∞) = ∞
+        if self.rasjonal == sp.S.Infinity: # lb(∞) = ∞
             return
         
         # Beregn logaritmen til base 2 ved hjelp av sympy
-        resultat = log(Mul(self.rasjonal, self.irrasjonal), 2)
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        resultat = sp.log(sp.Mul(self.rasjonal, self.irrasjonal), 2)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
         
 
     def lg(self) -> None:
         """Beregner logaritme til base 10
         """        
         global varseltekst
-        if self.rasjonal < S.Zero:
+
+        if self.rasjonal < NULLTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av positive tall!'
             return
-        if self.rasjonal == S.NaN:
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av et tall!'
             return
-        if self.rasjonal == S.Zero: # lb(0) = -∞
-            self.rasjonal = S.NegativeInfinity
-            self.irrasjonal = S.One
+        if self.rasjonal == NULLTALLET: # lg(0) = -∞
+            self.rasjonal = sp.S.NegativeInfinity
+            self.irrasjonal = ETTALLET
             return
-        if self.rasjonal == S.Infinity: # lb(∞) = ∞
+        if self.rasjonal == sp.S.Infinity: # lg(∞) = ∞
             return
         
-        # Beregn logaritmen til base 2 ved hjelp av sympy
-        resultat = log(Mul(self.rasjonal, self.irrasjonal), 10)
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
-
+        # Beregn logaritmen til base 10 ved hjelp av sympy
+        resultat = sp.log(sp.Mul(self.rasjonal, self.irrasjonal), 10)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
     def ln(self) -> None:
         """Beregner logaritme til base e, den naturlige logaritme
         """        
         global varseltekst
-        if self.rasjonal < S.Zero:
+
+        if self.rasjonal < NULLTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av positive tall!'
             return
-        if self.rasjonal == S.NaN:
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne logaritmus av et tall!'
             return
-        if self.rasjonal == S.Zero: # lb(0) = -∞
-            self.rasjonal = S.NegativeInfinity
-            self.irrasjonal = S.One
+        if self.rasjonal == NULLTALLET: # ln(0) = -∞
+            self.rasjonal = sp.S.NegativeInfinity
+            self.irrasjonal = ETTALLET
             return
-        if self.rasjonal == S.Infinity: # lb(∞) = ∞
+        if self.rasjonal == sp.S.Infinity: # ln(∞) = ∞
             return
         
-        # Beregn logaritmen til base 2 ved hjelp av sympy
-        resultat = log(Mul(self.rasjonal, self.irrasjonal), 2)
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        # Beregn logaritmen til base e ved hjelp av sympy
+        resultat = sp.log(sp.Mul(self.rasjonal, self.irrasjonal), sp.S.Exp1)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
 
     def sin(self) -> None:
         """Beregner sinus av en vinkel i grader eller radianer
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+
+        if self.rasjonal == IKKETALL:
             varseltekst = 'OBS! Kan bare beregne sinus av et tall!'
             return
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity:
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity:
             varseltekst = 'OBS! Kan ikke beregne sinus av uendelig!'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
             return
         
         # Beregn sinus ved hjelp av sympy
-        if self.irrasjonal == S.Pi:
-            resultat = sin(Mul(self.rasjonal, self.irrasjonal))
+        if self.enhet == u.degree or self.enhet == u.steradian:
+            ny_enhet = u.convert_to(self.enhet, u.radian)
+            rasjonal, irrasjonal, ny_enhet = split_måltall_enhet(ny_enhet)
+            resultat = sp.sin(sp.Mul(self.rasjonal, self.irrasjonal, rasjonal, irrasjonal))
+        elif self.enhet == u.radian or self.enhet == ETTALLET:
+            resultat = sp.sin(sp.Mul(self.rasjonal, self.irrasjonal))
         else:
-            resultat = sin(Mul(self.rasjonal, self.irrasjonal, S.Pi / 180))
+            varseltekst = 'OBS! Kan bare beregne sinus av vinkler i grader eller radianer!'
+            self.rasjonal = IKKETALL
+            return
 
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
 
     def cos(self) -> None:
         """Beregner kosinus av en vinkel i grader eller radianer
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+
+        if self.rasjonal == IKKETALL:
             varseltekst = 'OBS! Kan bare beregne kosinus av et tall!'
             return
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity:
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity:
             varseltekst = 'OBS! Kan ikke beregne kosinus av uendelig!'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
             return
         
         # Beregn kosinus ved hjelp av sympy
-        if self.irrasjonal == S.Pi:
-            resultat = cos(Mul(self.rasjonal, self.irrasjonal))
+        if self.enhet == u.degree or self.enhet == u.steradian:
+            ny_enhet = u.convert_to(self.enhet, u.radian)
+            rasjonal, irrasjonal, ny_enhet = split_måltall_enhet(ny_enhet)
+            resultat = sp.cos(sp.Mul(self.rasjonal, self.irrasjonal, rasjonal, irrasjonal))
+        elif self.enhet == u.radian or self.enhet == ETTALLET:
+            resultat = sp.cos(sp.Mul(self.rasjonal, self.irrasjonal))
         else:
-            resultat = cos(Mul(self.rasjonal, self.irrasjonal, S.Pi / 180))
-
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+            varseltekst = 'OBS! Kan bare beregne kosinus av vinkler i grader eller radianer!'
+            self.rasjonal = IKKETALL
+            return
+        
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
 
     def tan(self) -> None:
         """Beregner tangens av en vinkel i grader eller radianer
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+
+        if self.rasjonal == IKKETALL:
             varseltekst = 'OBS! Kan bare beregne tangens av et tall!'
             return
-        if self.rasjonal == S.Infinity or self.rasjonal == S.NegativeInfinity:
+        if self.rasjonal == sp.S.Infinity or self.rasjonal == sp.S.NegativeInfinity:
             varseltekst = 'OBS! Kan ikke beregne tangens av uendelig!'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
             return
         
         # Beregn tangens ved hjelp av sympy
-        if self.irrasjonal == S.Pi:
-            if abs(self.rasjonal) % S.One == S.Half:
-                varseltekst = 'OBS! Tangens av π/2 + nπ er ikke definert!'
-                self.rasjonal = S.NaN
-                self.irrasjonal = S.One
-                return
-            resultat = tan(Mul(self.rasjonal, self.irrasjonal))
-        else:
-            if abs(self.rasjonal) % Integer(180) == 90:
+        if self.enhet == u.radian or self.enhet == ETTALLET:
+            if self.irrasjonal == sp.S.Pi:
+                if abs(self.rasjonal) % ETTALLET == sp.S.Half:
+                    varseltekst = 'OBS! Tangens av π/2 + nπ er ikke definert!'
+                    self.rasjonal = IKKETALL
+                    self.irrasjonal = ETTALLET
+                    return
+            resultat = sp.tan(sp.Mul(self.rasjonal, self.irrasjonal))
+        elif self.enhet == u.degree or self.enhet == u.steradian:
+            ny_enhet = u.convert_to(self.enhet, u.radian)
+            rasjonal, irrasjonal, ny_enhet = split_måltall_enhet(ny_enhet)
+            argument = sp.Mul(self.rasjonal, self.irrasjonal, rasjonal, irrasjonal)
+            if abs(argument) % sp.Integer(180) == 90:
                 varseltekst = 'OBS! Tangens av 90° + n*180° er ikke definert!'
-                self.rasjonal = S.NaN
-                self.irrasjonal = S.One
+                self.rasjonal = IKKETALL
+                self.irrasjonal = ETTALLET
                 return
-            resultat = tan(Mul(self.rasjonal, self.irrasjonal, S.Pi / 180))
+            resultat = sp.tan(argument)
+        else:
+            varseltekst = 'OBS! Kan bare beregne tangens av vinkler i grader eller radianer!'
+            self.rasjonal = IKKETALL
+            return
 
-        self.rasjonal, self.irrasjonal = sjekk_resultat(resultat)
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.latexenhet = latex_enhet(self.enhet)
 
 
     def arcsin(self) -> None:
         """Beregner arcussinus av et tall i intervall [-1, 1]
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne arcsinus av et tall!'
             return
-        if abs(Mul(self.rasjonal, self.irrasjonal)) > S.One:
+        if abs(sp.Mul(self.rasjonal, self.irrasjonal)) > ETTALLET:
             varseltekst = 'OBS! Tallet må være i intervall [-1, 1]!'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
             return
         
         # Beregn arcsinus ved hjelp av sympy
-        resultat = asin(Mul(self.rasjonal, self.irrasjonal))
+        resultat = sp.asin(sp.Mul(self.rasjonal, self.irrasjonal))
 
-        self.rasjonal, self.irrasjonal = sjekk_resultat(Mul(resultat, 180 / S.Pi))
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.omgjør(u.degree) # Omgjør resultatet til grader
 
 
     def arccos(self) -> None:
         """Beregner arcuscosinus av et tall i intervall [-1, 1]
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne arccosinus av et tall!'
             return
-        if abs(Mul(self.rasjonal, self.irrasjonal)) > S.One:
+        if abs(sp.Mul(self.rasjonal, self.irrasjonal)) > ETTALLET:
             varseltekst = 'OBS! Tallet må være i intervall [-1, 1]!'
-            self.rasjonal = S.NaN
+            self.rasjonal = IKKETALL
             return
         
         # Beregn arccosinus ved hjelp av sympy
-        resultat = acos(Mul(self.rasjonal, self.irrasjonal))
+        resultat = sp.acos(sp.Mul(self.rasjonal, self.irrasjonal))
 
-        self.rasjonal, self.irrasjonal = sjekk_resultat(Mul(resultat, 180 / S.Pi))
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.omgjør(u.degree) # Omgjør resultatet til grader
 
 
     def arctan(self) -> None:
         """Beregner arctangens av et tall
         """        
         global varseltekst
-        if self.rasjonal == S.NaN:
+        if self.rasjonal == IKKETALL or self.enhet != ETTALLET:
             varseltekst = 'OBS! Kan bare beregne tangens av et tall!'
             return
         
         # Beregn arctangens ved hjelp av sympy
-        resultat = atan(Mul(self.rasjonal, self.irrasjonal))
+        resultat = sp.atan(sp.Mul(self.rasjonal, self.irrasjonal))
 
-        self.rasjonal, self.irrasjonal = sjekk_resultat(Mul(resultat, 180 / S.Pi))
+        self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(resultat)
+        self.omgjør(u.degree) # Omgjør resultatet til grader
 
 
     def utvid(self) -> None:
         """Utvider et uttrykk ved å bruke sympys expand(func=True)
         """
-        if self.rasjonal != S.NaN and self.irrasjonal != S.One:
-            uttrykk = expand(Mul(self.rasjonal, self.irrasjonal), func=True)
-            self.rasjonal, self.irrasjonal = sjekk_resultat(uttrykk)
+        if self.rasjonal != IKKETALL and self.irrasjonal != ETTALLET:
+            uttrykk = sp.expand(sp.Mul(self.rasjonal, self.irrasjonal, self.enhet), func=True)
+            self.rasjonal, self.irrasjonal, self.enhet = sjekk_resultat(uttrykk)
+            self.latexenhet = latex_enhet(self.enhet)
 
 
     def evaluer(self) -> None:
-        """Beregner et irrasjonalt tall til et rasjonalt tall ved å bruke sympy
+        """Estimerer et irrasjonalt tall til et rasjonalt tall ved å bruke sympy
         """
-        if self.rasjonal != S.NaN and self.irrasjonal != S.One:
-            tall = Mul(self.rasjonal, self.irrasjonal)
-            self.rasjonal = Rational(tall.evalf(n=MAKS_SIFRE, chop=Pow(10, -MAKS_SIFRE)))
-            self.irrasjonal = S.One
-            self.feil = Integer(log(abs(Add(tall, -self.rasjonal)), 10).evalf()) # Feil i beregningen
-            if self.feil < -100:
-                self.feil = S.Zero
+        if self.rasjonal != IKKETALL and self.irrasjonal != ETTALLET:
+            tall = sp.Mul(self.rasjonal, self.irrasjonal)           # Gange den rasjonale med den irrasjonale delen
+            rasjonal = sp.Rational(str(tall.evalf(n=MAKS_SIFRE)))   # Evaluer og omgjør til et rasjonalt tall
+            self.rasjonal, _, _ = sjekk_resultat(rasjonal)          # Sjekk resultatet
+            self.irrasjonal = ETTALLET
+            avvik = abs(sp.Add(tall, -self.rasjonal)).evalf()       # Beregne avviket for å beregne feilen
+            self.feil = NULLTALLET if avvik < 1e-100 else sp.Integer(sp.log(avvik, 10).evalf())
+
+
+    def omgjør(self, ny_enhet) -> None:
+        """Omgjør et tall til en annen enhet ved å gange tallet med konverteringsfaktoren mellom de to enhetene
+
+        Args:
+            ny_enhet: enheten som tallet skal omgjøres til
+        """
+        global varseltekst
+
+        if self.rasjonal == IKKETALL:
+            varseltekst = 'OBS! Kan bare omgjøre tall.'
+            return
+        if self.enhet == ETTALLET:
+            # Hvis tallet inneholder π antas at det er radianer som skal omgjøres til grader
+            if ny_enhet == u.degree and self.irrasjonal == sp.S.Pi:
+                self.rasjonal *= 180
+                self.irrasjonal = ETTALLET
+            self.enhet = ny_enhet
+            self.latexenhet = latex_enhet(self.enhet)
+            return
+        if ny_enhet == ETTALLET: # Det vil aldri skje siden omgjør(ny_enhet) kalles kun med en ny enhet
+            varseltekst = 'OBS! Kan ikke omgjøre til enheten 1.'
+            return
+        if not samme_dimensjon(self.enhet, ny_enhet):
+            varseltekst = 'OBS! Kan ikke omgjøre til enheter med forskjellige dimensjoner.'
+            return
+        
+        konverteringsfaktor = u.convert_to(self.enhet, ny_enhet)
+        rasjonal_konverteringsfaktor, irrasjonal_konverteringsfaktor, _ = split_måltall_enhet(konverteringsfaktor)
+        self.rasjonal *= rasjonal_konverteringsfaktor
+        self.irrasjonal *= irrasjonal_konverteringsfaktor
+        self.enhet = ny_enhet
+        self.latexenhet = latex_enhet(self.enhet)
+
+
+    def omgjør_SI(self) -> None:
+        """Omgjør et tall til SI-enhet ved å gange tallet med konverteringsfaktoren mellom den opprinnelige enheten og SI-enheten
+        """
+        global varseltekst
+
+        if self.rasjonal == IKKETALL:
+            varseltekst = 'OBS! Kan bare omgjøre tall.'
+            return
+        if self.enhet == ETTALLET: # Hvis tallet ikke har en enhet, kan det ikke omgjøres
+            return
+        
+        konverteringsfaktor = u.convert_to(self.enhet, u.systems.SI._base_units)
+        rasjonal_konverteringsfaktor, irrasjonal_konverteringsfaktor, enhet = split_måltall_enhet(konverteringsfaktor)
+        self.rasjonal *= rasjonal_konverteringsfaktor
+        self.irrasjonal *= irrasjonal_konverteringsfaktor
+        self.enhet = enhet
+        self.latexenhet = latex_enhet(self.enhet)
 
 
 def beregne(tallene: list[tall], operasjon: str) -> None:
@@ -640,6 +997,8 @@ def beregne(tallene: list[tall], operasjon: str) -> None:
     if len(tallene) == 0:
         return
     match operasjon:
+        case 'rydd':
+            tallene.clear()
         case 'slett':
             tallene.pop()
         case 'bytt':
@@ -658,9 +1017,9 @@ def beregne(tallene: list[tall], operasjon: str) -> None:
                 a = tallene.pop()
                 tallene[-1].minus(a)
             elif len(tallene) == 1:
-                tallene[-1].rasjonal *= S.NegativeOne # Bytter fortegn
+                tallene[-1].rasjonal *= sp.S.NegativeOne # Bytter fortegn
         case '--': # bytt fortegn
-            tallene[-1].rasjonal *= S.NegativeOne # Bytter fortegn
+            tallene[-1].rasjonal *= sp.S.NegativeOne # Bytter fortegn
         case '*':
             if len(tallene) > 1:
                 a = tallene.pop()
@@ -697,6 +1056,8 @@ def beregne(tallene: list[tall], operasjon: str) -> None:
                 tallene[-1].opphøyd_i(a)
         case 'lg': # logaritme til base 10
             tallene[-1].lg()
+        case 'log': # logaritme til base 10
+            tallene[-1].lg()
         case 'ln': # naturlig logaritme (base e)
             tallene[-1].ln()
         case 'lb': # logaritme til base 2
@@ -727,52 +1088,65 @@ def beregne(tallene: list[tall], operasjon: str) -> None:
             if len(tallene) > 1:
                 a = tallene.pop()
                 tallene[-1].mod(a)
+        case 'sum':
+            while len(tallene) > 1:
+                a = tallene.pop()
+                tallene[-1].pluss(a)
+        case 'Ø':
+            antall = tall(str(len(tallene)))
+            while len(tallene) > 1:
+                a = tallene.pop()
+                tallene[-1].pluss(a)
+            tallene[-1].delt_med(antall)
+        case 'prod':
+            while len(tallene) > 1:
+                a = tallene.pop()
+                tallene[-1].ganger(a)
         case 'hel':
             tallene[-1].gjør_hel()
-        case 'grad': # omgjør fra radianer til grader
-            a = tall('180')
-            a.delt_med(tall(PI))
-            tallene[-1].ganger(a)
-        case 'rad': # omgjør fra grader til radianer
-            a = tall(PI)
-            a.delt_med(tall('180'))
-            tallene[-1].ganger(a)
         case 'utvid': # utvider et uttrykk
-            if tallene[-1].irrasjonal != S.One:
+            if tallene[-1].irrasjonal != ETTALLET:
                 tallene[-1].utvid()
         case 'eval': # evaluerer et uttrykk
-            if tallene[-1].irrasjonal != S.One:
+            if tallene[-1].irrasjonal != ETTALLET:
                 tallene[-1].evaluer()
+        case 'SI': # omgjør til SI-enhet
+            tallene[-1].omgjør_SI()
         case _:
-            varseltekst = 'OBS! Ukjent operasjon'
+            enhet = parse_enhet(operasjon)
+            if enhet != ETTALLET:
+                tallene[-1].omgjør(enhet)
+            else:
+                varseltekst = 'OBS! Ukjent operasjon'
 
 
-def notasjon(tallet: Rational, feil: Integer) -> str:
+def notasjon(tallet: sp.Rational, feil: sp.Integer) -> tuple[str, sp.Integer]:
     """Konverterer en brøk til vitenskapelig notasjon
 
     Args:
-        tallet (Rational): tallet som skal skrives i vitenskapelig notasjon
-        feil (Integer): feil i beregningen
+        tallet (sp.Rational): tallet som skal skrives i vitenskapelig notasjon
+        feil (sp.Integer): feil i beregningen
     Returns:
         str: tallet i vitenskapelig notasjon slik at den kan brukes i LaTeX
+        sp.Integer: den oppdaterte feilen
     """
-    if not isinstance(tallet, Rational):
-        return ''
-    fortegn: str = '-' if tallet < S.Zero else ''
+    if not isinstance(tallet, sp.Rational):
+        return '', feil
+    fortegn: str = '-' if tallet < NULLTALLET else ''
     ellipsis: str = ''
-    teller: Integer = abs(numer(tallet))
-    nevner: Integer = denom(tallet)
+    teller: sp.Integer = abs(sp.numer(tallet))
+    nevner: sp.Integer = sp.denom(tallet)
     scientific_str: str = ''
 
     if teller < nevner:
         # Beregn hvor mye mindre enn 1 tallet er, dvs. hvor mange nuller bak kommaet det har
-        rest: Integer = teller
-        nuller: Integer = S.Zero
+        rest: sp.Integer = teller
+        nuller: sp.Integer = NULLTALLET
 
         # Tell hvor ofte vi må gange rest med ti til det blir større enn nevner
         while rest < nevner:
-            rest *= Integer(10)
-            nuller += S.One
+            rest *= sp.Integer(10)
+            nuller += ETTALLET
         
         # Gjør en lang divisjon bak nullene
         huskelapp: dict = {}  # rest -> indeks i desimaldelen
@@ -784,13 +1158,13 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
             desimaldel.append(str(siffer))
             huskelapp[rest] = indeks # Husk at vi fant rest ved indeks
             rest %= nevner # Beregne ny rest
-            rest *= Integer(10) 
-            indeks += S.One
+            rest *= sp.Integer(10) 
+            indeks += ETTALLET
         
         if len(desimaldel) >= MAKS_SIFRE: # Vi har nådd ønsket presisjon, men ikke funnet en periode
             førperiode = ''.join(desimaldel)
             periode = ''
-            feil = max(-MAKS_SIFRE, feil)
+            feil = max(-MAKS_SIFRE, feil) if feil != NULLTALLET else -MAKS_SIFRE # Feilen er minst 10^-MAKS_SIFRE
             ellipsis = '\\ldots'
         else: # Vi har funnet perioden fordi resten står på huskelappen
             periode_start_indeks = huskelapp[rest]
@@ -807,7 +1181,7 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
                 førperiode = sifrene[1:] # ta bort '1' som vi har tilføyd
             else: # Det var en i mente slik at '1' blir '2'
                 førperiode = '1' + sifrene[1:]
-                nuller -= S.One # alt flyttes en plass til venstre
+                nuller -= ETTALLET # alt flyttes en plass til venstre
             periode = ''
 
         if nuller == 1: # Det er bare en null foran kommaet
@@ -817,7 +1191,7 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
                 scientific_str = '0,' + førperiode + ellipsis
             else:
                 scientific_str = '0'
-        elif nuller < MAKS_SIFRE//Integer(2): # Hvis det er ikke altfor mange nuller, kan tallet framstilles som desimaltall
+        elif nuller < MAKS_SIFRE//sp.Integer(2): # Hvis det er ikke altfor mange nuller, kan tallet framstilles som desimaltall
             if periode:
                 if førperiode:
                     scientific_str = '0,' + ('0' * int(nuller - 1)) + førperiode + '\\overline{' + periode + '}'
@@ -825,7 +1199,7 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
                 elif periode[-1] == '0': # Flytt nuller fra slutten av perioden til begynnelsen
                     uten_nuller = periode.rstrip('0') # Det kan være flere 0er
                     n_nuller = len(periode) - len(uten_nuller) # Beregn hvor mange nuller det er
-                    scientific_str = '0,' + ('0' * int(nuller - n_nuller - S.One)) + '\\overline{' + ('0' * n_nuller) + uten_nuller + '}'
+                    scientific_str = '0,' + ('0' * int(nuller - n_nuller - ETTALLET)) + '\\overline{' + ('0' * n_nuller) + uten_nuller + '}'
                 else: # Det er ikke nuller som må flyttes
                     scientific_str = '0,' + ('0' * int(nuller - 1)) + '\\overline{' + periode + '}'
             elif førperiode:
@@ -833,7 +1207,7 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
             else:
                 scientific_str = '0'
         else: # Tallet må framstilles i vitenskapelig notasjon
-            if feil != S.Zero:
+            if feil != NULLTALLET:
                 feil -= nuller
             if førperiode: # Det er sifre foran perioden
                 første_siffer = førperiode[0]
@@ -853,11 +1227,11 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
                 scientific_str = første_siffer + ',\\overline{' + periode + '} \\cdot 10^{-' + str(nuller) + '}'
     else: # teller >= nevner, dvs, tallet >= 1
         # Beregn først tallet foran kommaet
-        heldel = Integer(abs(tallet))
+        heldel = sp.Integer(abs(tallet))
         helstr = str(heldel)
         eksponent = len(helstr) - 1  # eksponenten er antall sifre i heldelen minus 1 (minus 1 fordi det skal være ett siffer foran kommaet)
         # Beregn desimaldelen ved lang divisjon
-        rest = teller % nevner * Integer(10)
+        rest = teller % nevner * sp.Integer(10)
         huskelapp: dict = {}  # rest -> indeks i desimaldelen
         desimaldel: list[str] = []
         indeks: int = 0
@@ -867,13 +1241,13 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
             desimaldel.append(str(siffer))
             huskelapp[rest] = indeks # Husk at vi fant rest ved indeks
             rest %= nevner # Beregne ny rest
-            rest *= Integer(10)
-            indeks += S.One
+            rest *= sp.Integer(10)
+            indeks += ETTALLET
             
         if len(desimaldel) >= MAKS_SIFRE: # Vi har nådd ønsket presisjon, men ikke funnet en periode
             førperiode = ''.join(desimaldel)
             periode = ''
-            feil = max(-MAKS_SIFRE, feil)
+            feil = max(-MAKS_SIFRE, feil) if feil != NULLTALLET else -MAKS_SIFRE # Feilen er minst 10^-MAKS_SIFRE
             førperiode = førperiode + '\\ldots'
         else: # Vi har funnet perioden fordi resten står på huskelappen
             periode_start_indeks = huskelapp[rest]
@@ -890,26 +1264,26 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
                 førperiode = sifrene[1:] # ta bort '1' som vi har tilføyd
             else: # Det var en i mente slik at '1' blir '2'
                 førperiode = '1' + sifrene[1:]
-                eksponent -= S.One # alt flyttes en plass til venstre
+                eksponent -= ETTALLET # alt flyttes en plass til venstre
             periode = ''
 
-        if eksponent <= S.One: # Hvis heldelen har bare en eller to sifre, kan de bli stående
+        if eksponent <= ETTALLET: # Hvis heldelen har bare en eller to sifre, kan de bli stående
             første_siffer = helstr
             brøkdel = førperiode + '\\overline{' + periode + '}' if periode else førperiode
             if brøkdel:
                 scientific_str = første_siffer + ',' + brøkdel
             else:
                 scientific_str = første_siffer
-        elif eksponent < MAKS_SIFRE//Integer(4): # Hvis tallet ikke er for stor, kan den framstilles som desimaltall
+        elif eksponent < MAKS_SIFRE//sp.Integer(4): # Hvis tallet ikke er for stor, kan den framstilles som desimaltall
             første_siffer = '{:,}'.format(int(heldel)).replace(',', '~')
             brøkdel = førperiode + '\\overline{' + periode + '}' if periode else førperiode
-            eksponent = S.Zero
+            eksponent = NULLTALLET
             if brøkdel:
                 scientific_str: str = første_siffer + ',' + brøkdel
             else:
                 scientific_str: str = første_siffer
         else: # ellers bruker vi vitenskapelig notasjon med ett siffer foran kommaet
-            if feil != S.Zero:
+            if feil != NULLTALLET:
                 feil += eksponent
             første_siffer = helstr[0]
             førperiode = helstr[1:] + førperiode
@@ -928,22 +1302,21 @@ def notasjon(tallet: Rational, feil: Integer) -> str:
             else:
                 scientific_str = første_siffer + ' \\cdot 10^{' + str(eksponent) + '}'
 
-    if feil != S.Zero:
-        return '\\approx ' + fortegn + scientific_str + '\\qquad \\pm10^{' + str(feil) + '}'
-    return '= ' + fortegn + scientific_str 
+    if feil != NULLTALLET:
+        return '\\approx ' + fortegn + scientific_str, feil
+    return '= ' + fortegn + scientific_str, feil 
 
 
-def heltall_til_latex(verdi: Integer, feil: Integer) -> str:
+def heltall_til_latex(verdi: sp.Integer, feil: sp.Integer) -> str:
     """Konverterer et heltall til en LaTeX-streng.
     Args:
-        verdi (Integer): Heltallet som skal konverteres til LaTeX-format.
-        feil (Integer): Feil i beregningen
+        verdi (sp.Integer): Heltallet som skal konverteres til LaTeX-format.
+        feil (sp.Integer): Feil i beregningen
     Returns:
         str: LaTeX-strengen som representerer tallet
     """
     likhetstegn: str = '= '
     ellipsis: str = ''
-    feilstr: str = '' if feil == S.Zero else '\\qquad \\pm10^{' + str(feil) + '}'
 
     eksponent = num_digits(verdi) - 1
 
@@ -957,16 +1330,14 @@ def heltall_til_latex(verdi: Integer, feil: Integer) -> str:
         if ikke_bare_nuller != -1: # Det finnes sifre som ikke vises. Derfor er resultatet ikke eksakt.
             likhetstegn = '\\approx '
             ellipsis = '\\ldots'
-            feileksponent = max(eksponent - MAKS_SIFRE - ikke_bare_nuller - 1, feil)
-            feilstr = '\\qquad \\pm10^{' + str(feileksponent) + '}'
-    else:
+            feil = max(eksponent - MAKS_SIFRE - ikke_bare_nuller - 1, feil) if feil != NULLTALLET else eksponent - MAKS_SIFRE - ikke_bare_nuller - 1
         resten_av_tall = ''.join(str(sifr) for sifr in sifre[2:]) 
 
     uten_nuller = resten_av_tall.rstrip('0') # Fjerner nuller på slutten av resten av tallet
 
     komma = ',' if len(uten_nuller) > 0 else '' # Hvis det er ingen sifre etter kommaet, fjerner vi kommaet
 
-    return likhetstegn + første_siffer + komma + uten_nuller + ellipsis + '\\cdot 10^{' + str(eksponent) + '}' + feilstr
+    return likhetstegn + første_siffer + komma + uten_nuller + ellipsis + '\\cdot 10^{' + str(eksponent) + '}', feil
 
 
 def til_latex(tallet: tall) -> str:
@@ -977,53 +1348,63 @@ def til_latex(tallet: tall) -> str:
     Returns:
         str: LaTeX-strengen som representerer tallet
     """
-    if tallet.rasjonal == S.Infinity:
+    if tallet.rasjonal == sp.S.Infinity:
         return '= \\infty'
-    if tallet.rasjonal == S.NegativeInfinity:
+    if tallet.rasjonal == sp.S.NegativeInfinity:
         return '= -\\infty'
-    if tallet.rasjonal == S.NaN:
+    if tallet.rasjonal == IKKETALL:
         return '\\bot'
 
-    verdi = tallet.rasjonal if isinstance(tallet.rasjonal, Rational) else None
+    verdi = tallet.rasjonal if isinstance(tallet.rasjonal, sp.Rational) else None
 
-    limit = Pow(10, MAKS_SIFRE)
-    if verdi and tallet.irrasjonal == S.One: # Rasjonale tall kan vises som som brøk, blandet tall eller heltall
+    limit = sp.Pow(10, MAKS_SIFRE)
+    if verdi and tallet.irrasjonal == ETTALLET: # Rasjonale tall kan vises som som brøk, blandet tall eller heltall
+        likhetstegn: str = '= ' if tallet.feil == NULLTALLET else '\\approx '
         if verdi.is_integer: # Det er et heltall
             if abs(verdi) < limit:
                 # Formater tallet slik at de er lettere å lese, dvs. 1000000 blir 1 000 000
-                if tallet.feil != 0:
-                    return '\\approx {:,}'.format(int(verdi)).replace(',', '~') + '\\qquad \\pm10^{' + str(tallet.feil) + '}'
-                else:
-                    return '= {:,}'.format(int(verdi)).replace(',', '~')
+                return likhetstegn + '{:,}'.format(int(verdi)).replace(',', '~')
             # Et heltall med flere enn MAKS_SIFRE sifre vises i vitenskapelig notasjon
-            return heltall_til_latex(Integer(verdi), tallet.feil)
+            uttrykk, feil = heltall_til_latex(sp.Integer(verdi), tallet.feil)
+            tallet.feil = feil
+            return uttrykk
         if verdi.is_rational: # Det er en brøk
-            teller: Integer = numer(verdi) # Henter teller fra brøken
-            nevner: Integer = denom(verdi) # Henter nevner fra brøken
+            teller: sp.Integer = sp.numer(verdi) # Henter teller fra brøken
+            nevner: sp.Integer = sp.denom(verdi) # Henter nevner fra brøken
             if verdi > 1 or verdi < -1:
                 if max(teller, nevner) < limit: # Det er et blandet tall som kan vises på vanlig måte og vitenskapelig notasjon
-                    hel = Integer(verdi)
+                    hel = sp.Integer(verdi)
                     # Formater hel, teller og nevner slik at de er lettere å lese, dvs. 1000000 blir 1 000 000
                     nevnerstr = '{:,}'.format(int(nevner)).replace(',', '~')
-                    tellerstr = '{:,}'.format(int(abs(Add(teller, -Mul(hel, nevner))))).replace(',', '~')
-                    helstr = '= {:,}'.format(int(hel)).replace(',', '~')
-                    return helstr + ' \\frac{' + tellerstr + '}{' + nevnerstr + '} ' + notasjon(verdi, tallet.feil)
-                return notasjon(verdi, tallet.feil) 
+                    tellerstr = '{:,}'.format(int(abs(sp.Add(teller, -sp.Mul(hel, nevner))))).replace(',', '~')
+                    helstr = likhetstegn + '{:,}'.format(int(hel)).replace(',', '~')
+                    uttrykk, feil = notasjon(verdi, tallet.feil)
+                    tallet.feil = feil
+                    return helstr + ' \\frac{' + tellerstr + '}{' + nevnerstr + '} ' + uttrykk
+                uttrykk, feil = notasjon(verdi, tallet.feil)
+                tallet.feil = feil
+                return uttrykk  
             teller = abs(teller)
             if max(teller, nevner) < limit: # Det er en brøk som kan vises på vanlig måte
                 # Formater teller og nevner slik at de er lettere å lese, dvs. 1000000 blir 1 000 000
                 tellerstr = '{:,}'.format(int(teller)).replace(',', '~')
                 nevnerstr = '{:,}'.format(int(nevner)).replace(',', '~')
-                if verdi < 0: # Hvis tallet er negativt, må vi vise det med minus foran
-                    return '= -\\frac{' + tellerstr + '}{' + nevnerstr + '}' + notasjon(verdi, tallet.feil)
+                if verdi < NULLTALLET: # Hvis tallet er negativt, må vi vise det med minus foran
+                    uttrykk, feil = notasjon(-verdi, tallet.feil)
+                    tallet.feil = feil
+                    return likhetstegn + '-\\frac{' + tellerstr + '}{' + nevnerstr + '}' + uttrykk
                 else:
-                    return '= \\frac{' + tellerstr + '}{' + nevnerstr + '}' + notasjon(verdi, tallet.feil)
+                    uttrykk, feil = notasjon(verdi, tallet.feil)
+                    tallet.feil = feil
+                    return likhetstegn + '\\frac{' + tellerstr + '}{' + nevnerstr + '}' + uttrykk
             # Hvis teller eller nevner er for store, brukes bare vitenskapelig notasjon
-            return notasjon(verdi, tallet.feil)
+            uttrykk, feil = notasjon(verdi, tallet.feil)
+            tallet.feil = feil
+            return uttrykk
         return '\\bot' # Det er ikke et tall som kan formateres til LaTeX-formatet
 
     # Tallet er irrasjonalt
-    return '= ' + latex(Mul(verdi, tallet.irrasjonal), decimal_separator='comma', max=MAKS_SIFRE)
+    return '= ' + sp.latex(sp.Mul(verdi, tallet.irrasjonal), decimal_separator='comma', max=MAKS_SIFRE)
 
 
 def skriv_resultat(tallet: tall) -> PIL.Image:
@@ -1041,11 +1422,18 @@ def skriv_resultat(tallet: tall) -> PIL.Image:
     ax.axis('off')
         
     # Lage en LaTeX-representasjon av det matematiske uttrykket
-    uttrykk = '$' + til_latex(tallet) + '$'
-
+    uttrykk_tall = '$' + til_latex(tallet) + '$'
+    uttrykk_feil = '$(\\pm10^{' + str(tallet.feil) + '})$' if tallet.feil != NULLTALLET else ''
+    uttrykk_enhet = '$' + tallet.latexenhet + '$' if tallet.latexenhet else ''
        
     # Tilføy uttrykket som tekst til figuren
-    ax.text(0.5, 0.5, uttrykk, fontsize=16, ha='center', va='center')
+    if uttrykk_feil:
+        ax.text(0.45, 0.4, uttrykk_tall, transform=fig.transFigure, color='black', fontsize=16, ha='center', va='baseline')
+        ax.text(0.90, 0.4, uttrykk_feil, transform=fig.transFigure, color='gray', fontsize=14, ha='center', va='baseline')
+    else:
+        ax.text(0.5, 0.4, uttrykk_tall, transform=fig.transFigure, color='black', fontsize=16, ha='center', va='baseline')
+    if uttrykk_enhet:
+        ax.text(0.96, 0.4, uttrykk_enhet, transform=fig.transFigure, color='black', fontsize=16, ha='center', va='baseline')
 
     # Trykke figuren på lerret
     lerret = FigureCanvasAgg(fig)
@@ -1070,12 +1458,11 @@ def stakke(stabel: list[tall]) -> None:
             lbl_stabel[7 - i].image = toga.Image(img)
         else:
             lbl_stabel[7 - i].image = None
-    resultat = stabel[-1].kopi()
-    resultat.evaluer()
-    img = skriv_resultat(resultat)
-    lbl_resultat.image = toga.Image(img)
-    if resultat.feil == S.Zero:
-        lbl_stabel[7].image = toga.Image(img)
+    if len(stabel) > 0:
+        resultat = stabel[-1].kopi()
+        resultat.evaluer()
+        img = skriv_resultat(resultat)
+        lbl_resultat.image = toga.Image(img)
 
 
 class SymKalkulator(toga.App):
@@ -1087,7 +1474,7 @@ class SymKalkulator(toga.App):
     def startup(self) -> None:
         """Startup er en funksjon som hver Toga-app må ha. Det er funksjonen som kjøres når SymKalkulator() kalles.
         """        
-        global varseltekst
+        global varseltekst, spesielle_tall
         stabel: list[tall] = []
 
         async def inntastet(self) -> None:
@@ -1103,16 +1490,13 @@ class SymKalkulator(toga.App):
             if innput[-1].isdigit(): # Ett tall har blitt tastet inn
                 nytall = tall(innput)
                 stabel.append(nytall) # Tallet legges på stabelen
-            elif len(innput) == 1: # Ikke ett tall, men bare ett tegn har blitt tastet inn
-                if innput == 'e': # Det kan være Eulers tall e
-                    nytall = tall('e')
-                    stabel.append(nytall) # Tallet legges på stabelen
-                else: # Eller det er en operasjon fra listen ['+', '-', '*', '/', '%', '!', 'v']
-                    operasjon = innput
-                    beregne(stabel, operasjon) # Anvender operasjonen på tallene som ligger på stabelen
-            elif innput in {'-e', 'pi', '-pi', 'tau', '-tau', 'fi', '-fi', 'phi', '-phi', 'oo', '-oo'}: # Det har blitt tastet inn flere enn ett tegn
+            elif innput in spesielle_tall: # Det har blitt tastet inn flere enn ett tegn
                 nytall = tall(innput)
                 stabel.append(nytall)
+            elif len(innput) == 1: # Ikke ett tall, men bare ett tegn har blitt tastet inn
+                # Det er en operasjon fra listen ['+', '-', '*', '/', '%', '!', 'v']
+                operasjon = innput
+                beregne(stabel, operasjon) # Anvender operasjonen på tallene som ligger på stabelen
             elif (innput[-1] in ['+', '-', '*', '/', '%', '!', 'v']) and innput[-2].isdigit():
                 # Det er ett tall med en operasjon som består av ett tegn
                 operasjon = innput[-1]
@@ -1125,6 +1509,9 @@ class SymKalkulator(toga.App):
                 nytall = tall(innput[:-2])
                 stabel.append(nytall)
                 beregne(stabel, operasjon)
+            elif '  ' in innput: # Det er et tall med en enhet, f.eks. '5 m'
+                nytall = tall(innput)
+                stabel.append(nytall)
             else:
                 operasjon = innput
                 beregne(stabel, operasjon)
@@ -1140,10 +1527,11 @@ class SymKalkulator(toga.App):
             """            
             if len(stabel) > 0: # Den kopier siste tall fra stabelen hvis det er et tall på stabelen
                 tallet = stabel[-1].kopi()
-                pyperclip.copy(str(Mul(tallet.rasjonal, tallet.irrasjonal).evalf(n=MAKS_SIFRE)))
+                pyperclip.copy(str(sp.Mul(tallet.rasjonal, tallet.irrasjonal).evalf(n=MAKS_SIFRE)))
+
 
         # Det følgende er fortsatt del av startup-funksjonen. Her defineres hvordan vinduet ser ut og fungerer.
-        innhold = toga.Box(style=Pack(direction=COLUMN, padding=10)) # Innholdet i hovedvinduet
+        innhold = toga.Box(style=Pack(direction=COLUMN, margin=2)) # Innholdet i hovedvinduet
         self.main_window = toga.MainWindow(title=self.formal_name) # Hovedvinduet må hete 'main_window'
         self.main_window.content = innhold
         # Jeg bruker norske betegnelser i menyen
@@ -1157,6 +1545,13 @@ class SymKalkulator(toga.App):
             shortcut=toga.Key.MOD_1 + 'h',
             group=toga.Group.HELP
         )
+        enheter_cmd = toga.Command(
+            self.enheter,
+            text='Enheter',
+            tooltip='Vis enheter du kan bruke',
+            shortcut=toga.Key.MOD_1 + 'e',
+            group=toga.Group.HELP
+        )
         copy_cmd = toga.Command(
             kopier,
             text='Kopier',
@@ -1164,26 +1559,27 @@ class SymKalkulator(toga.App):
             shortcut=toga.Key.MOD_1 + 'c'
         )
         self.commands.add(hjelp_cmd)
+        self.commands.add(enheter_cmd)
         self.commands.add(copy_cmd)
         
         # Lage stabel-boxen
-        stabel_box = toga.Box(style=Pack(direction=COLUMN, height=665, padding=2))
+        stabel_box = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin=2))
         global lbl_stabel
-        lbl_stabel = [toga.ImageView(None, style=Pack(height=80, padding=2)) for _ in range(8)]
+        lbl_stabel = [toga.ImageView(None, style=Pack(height=80, margin=2)) for _ in range(8)]
         for i in range(7):
             stabel_box.add(lbl_stabel[i])
         stabel_box.add(toga.Divider())
         stabel_box.add(lbl_stabel[7])
 
         # Lage innput-boxen
-        input_box = toga.Box(style=Pack(direction=COLUMN, alignment=CENTER, padding=2))
-        self.innput = toga.TextInput(style=Pack(text_align=CENTER, width=1200, height=50, padding=2, font_size=20), on_confirm=inntastet)
+        input_box = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin=2))
+        self.innput = toga.TextInput(style=Pack(text_align=CENTER, width=1200, height=50, margin=2, font_size=20), on_confirm=inntastet)
         input_box.add(self.innput)
 
         # Lage resultat-boxen
-        resultat_box = toga.Box(style=Pack(direction=COLUMN, alignment=CENTER, padding=2))
+        resultat_box = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin=2))
         global lbl_resultat
-        lbl_resultat = toga.ImageView(None, style=Pack(height=80, padding=2))
+        lbl_resultat = toga.ImageView(None, style=Pack(height=80, margin=2))
         resultat_box.add(lbl_resultat)
 
         # Tilføy alle deler til hovedboxen
@@ -1193,12 +1589,17 @@ class SymKalkulator(toga.App):
         innhold.add(input_box)
         innhold.add(toga.Divider())
         innhold.add(resultat_box)
-        innhold.add(toga.Divider())
-        innhold.add(toga.Divider())
         self.main_window.show()
 
     async def hjelp(self, widget):
         hjelpedialog = toga.StackTraceDialog('Hjelpevindu', hjelpetittel, hjelpetekst)
+        await self.main_window.dialog(hjelpedialog)
+
+
+    async def enheter(self, widget):
+        enheter = ', '.join(u.__all__[62:358])
+        enheter += 'min, \', ", a, d, grad, in og Å'
+        hjelpedialog = toga.StackTraceDialog('Hjelpevindu', 'Enheter du kan bruke', enheter)
         await self.main_window.dialog(hjelpedialog)
 
 
