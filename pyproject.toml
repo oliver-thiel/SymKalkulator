@@ -1,19 +1,20 @@
-# This project was generated with 0.3.25 using template: https://github.com/beeware/briefcase-template @ v0.3.25
+# This project was generated with 0.4.2 using template: https://github.com/beeware/briefcase-template @ v0.4.2
 [tool.briefcase]
 project_name = "SymKalkulator"
 bundle = "info.oliver-thiel"
-version = "1.1.0"
+version = "2.0.0"
 url = "https://github.com/oliver-thiel/SymKalkulator"
-license.file = "LICENSE"
+license = "MIT"
+license-files = ["LICENSE"]
 author = "Oliver Thiel"
 author_email = "privat@oliver-thiel.info"
 
 [tool.briefcase.app.symkalkulator]
 formal_name = "SymKalkulator"
-description = "A desktop kalkulator that uses RPN"
+description = "En kalkulator-app som bruker omvendt polsk notasjon, symboler og enheter"
 long_description = """Denne kalkulatoren bruker omvendt polsk notasjon, dvs.
 istedenfor 'a + b<ENTER>' taster du inn 'a<ENTER>b<ENTER>+<ENTER>' eller 'a<ENTER>b+<ENTER>'.
-Dessuten bruker kalkulatoren brøk og symboler som pi, fi og e.
+Dessuten bruker kalkulatoren brøk, symboler som pi, fi og e og fysiskalske enheter.
 En liste med funksjoner som du kan bruke, får du ved <CTRL>+'h' eller i menyen Help - Hjelp.
 """
 icon = "icons/minkalkulator"
@@ -187,17 +188,23 @@ requires = [
 base_theme = "Theme.MaterialComponents.Light.DarkActionBar"
 
 build_gradle_dependencies = [
-    "com.google.android.material:material:1.12.0",
+    "com.google.android.material:material:1.13.0",
     # Needed for DetailedList
     # "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0",
     # Needed for MapView
     # "org.osmdroid:osmdroid-android:6.1.20",
+    # Needed for WebView
+    # "androidx.webkit:webkit:1.15.0",
 ]
+
+# Needed for WebView
+# build_gradle_extra_content="""
+# chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
+# """
 
 # Web deployments
 [tool.briefcase.app.symkalkulator.web]
 requires = [
     "toga-web~=0.5.0",
 ]
-style_framework = "Shoelace v2.3"
 
