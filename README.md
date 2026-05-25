@@ -1,49 +1,65 @@
 SymKalkulator
 =============
 
-SymKalkulator is a desktop calculator app. It uses RPN (Reverse Polish Notation), fractions, and symbols like π and φ.
+SymKalkulator is a desktop calculator app. It uses RPN (Reverse Polish Notation), fractions, symbols like π and φ, and physical units.
 It is called "Kalkulator" rather than "calculator" because it is in Norwegian.
 
 ## Commands
 The following commands are implemented:
 ```
-Slett y fra stabelen              → slett 
-Bytt x og y                       →  bytt 
-Kopier y                          →  kopi 
-Adder x + y                       →   +   
-Subtraher x - y                   →   -   
-Bytt fortegn av y                 →   --  
-Multipliser x·y                   →   *   
-Divider x/y                       →   /   
-Beregn y prosent av x             →   %   
-Beregn fakultet av y              →   !   
-Beregn binominalkoeffisient       →   ()  
-Potenser xʸ                       →   **  
-Beregn kvadratrot av y            →   v   
-Beregn y-te rot av x              →  rot  
-Beregn briggsk logaritme av y     →   lg  
-Beregn naturlig logaritme av y    →   ln  
-Beregn binær logaritme y          →   lb  
-Beregn sinus av y                 →  sin  
-Beregn cosinus av y               →  cos  
-Beregn tangens av y               →  tan  
-Beregn arcsinus av y              → arcsin
-Beregn arccosinus av y            → arccos
-Beregn arctangens av y            → arctan
-Beregn det y-te fibonacci-tallet  →  fib  
-Beregn 1/y                        →   //  
-Beregn rest av divisjonen x/y     →  mod  
-Omgjør y til heltall              →  hel  
-Omgjør y fra radianer til grader  →  grad 
-Omgjør y fra grader til radianer  →  rad  
-Utvid et uttrykk                  → utvid 
-Evaluer et uttrykk                →  eval 
-Det irrasjonale tallet π          →   pi  
-Det irrasjonale tallet τ          →  tau  
-Det irrasjonale tallet e          →   e   
-Det irrasjonale tallet φ          →   fi  
+Rydd stabelen                                  →  rydd 
+Slett y fra stabelen                           → slett 
+Bytt x og y                                    →  bytt 
+Kopier y                                       →  kopi 
+Adder x + y                                    →   +   
+Subtraher x - y                                →   -   
+Bytt fortegn av y                              →   --  
+Multipliser x·y                                →   *   
+Divider x/y                                    →   /   
+Beregn y prosent av x                          →   %   
+Beregn fakultet av y                           →   !   
+Beregn binominalkoeffisient                    →   ()  
+Beregn potens xʸ                               →   **  
+Beregn kvadratrot av y                         →   v   
+Beregn y-te rot av x                           →  rot  
+Beregn briggsk logaritme av y                  →   lg  
+Beregn naturlig logaritme av y                 →   ln  
+Beregn binær logaritme y                       →   lb  
+Beregn sinus av y                              →  sin  
+Beregn cosinus av y                            →  cos  
+Beregn tangens av y                            →  tan  
+Beregn arcsinus av y                           → arcsin
+Beregn arccosinus av y                         → arccos
+Beregn arctangens av y                         → arctan
+Beregn det y-te fibonacci-tallet               →  fib  
+Beregn 1/y                                     →   //  
+Beregn 1/y                                     → resiprok
+Beregn rest av divisjonen x/y                  →  mod  
+Beregn rest av divisjonen x/y                  →  rest 
+Beregn summen av alle tallene i stabelen       →  sum  
+Beregn gjennomsnitt av alle tallene i stabelen →   Ø   
+Beregn produktet av alle tallene i stabelen    →  prod 
+Omgjør y til heltall                           →  hel  
+Omgjør y til enheten <enhet>                   → <enhet>
+Omgjør y til SI-enheter                        →   SI  
+Utvid et uttrykk                               → utvid 
+Evaluer et uttrykk                             →  eval 
+Eulers tall e                                  →   e   
+sirkeltallet π                                 →   π   
+sirkeltallet π                                 →   pi  
+Det dobbelte sirkeltallet τ                    →  tau  
+Det irrasjonale tallet φ                       →   fi  
+Det irrasjonale tallet φ                       →  phi  
+uendelig ∞                                     →   oo  
+gravitasjonskonstanten G                       →   G   
+lysets hastighet c                             →   c   
+Plancks redusete konstant ħ                    →  hbar 
+Plancks redusete konstant ħ                    →   ħ   
+Coulombs konstant kₑ                           →   k   
+gasskonstanten R                               →   R   
+
 ```
-The trigonometric functions use degrees by default. However, if the argument is a multiple of π, then radians are used. Thus, typing `45<ENTER>sin<ENTER>` or `pi<ENTER>4/<ENTER>sin<ENTER>` or `45<ENTER>rad<ENTER>sin<ENTER>` will all yield the same result.
+If you enter a physical unit, the app checks whether the current number already has a unit. If the number has no unit, the unit is applied to the number. If the number has a unit, it is converted to the new unit. A warning occurs if the units are incompatible. Numbers that are multiples of π are treated as radians.
 
 ## Example
 The following screenshots show how you can calculate the volume of a cone with a base radius of 2.5 and a height of 3.8:
